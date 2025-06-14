@@ -18,7 +18,7 @@ load_dotenv()
 api_key    = os.getenv('USE_API_KEY')
 base_url   = os.getenv('USE_BASE_URL')
 model_name = os.getenv('MODEL_NAME')
-delay_secs = os.getenv('RATE_LIMIT_PAUSE_SECS')
+delay_secs = int(os.getenv('RATE_LIMIT_PAUSE_SECS'))
 
 @app.route('/api/chat', methods=['POST'])
 def query_endpoint():

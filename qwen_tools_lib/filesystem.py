@@ -14,13 +14,13 @@ def get_cwd():
     except Exception as e:
         return f"Error getting current working directory: {e}"
 
-def read_file(path, enumerate=False, start_line=1, end_line=None, show_repr=False):
+def read_file(path, show_line_numbers=False, start_line=1, end_line=None, show_repr=False):
     """
     Read the contents of a file with optional line numbering, range selection, and debug formatting.
     
     Args:
         path (str): The path to the file to read.
-        enumerate (bool): Whether to include line numbers (defaults to False).
+        show_line_numbers (bool): Whether to include line numbers (defaults to False).
         start_line (int): First line to read, 1-indexed (defaults to 1).
         end_line (int): Last line to read, 1-indexed, None for all lines (defaults to None).
         show_repr (bool): Whether to show Python's repr() of each line, revealing whitespace and special characters (defaults to False).
@@ -37,7 +37,7 @@ def read_file(path, enumerate=False, start_line=1, end_line=None, show_repr=Fals
             content = file.read()
         
         # Apply filtering if needed
-        if enumerate or start_line > 1 or end_line is not None:
+        if show_line_numbers or start_line > 1 or end_line is not None:
             lines = content.splitlines()
             
             # Apply line range
@@ -49,7 +49,7 @@ def read_file(path, enumerate=False, start_line=1, end_line=None, show_repr=Fals
                 filtered_lines = lines[start_idx:]
             
             # Format lines
-            if enumerate:
+            if show_line_numbers:
                 if show_repr:
                     content = "\n".join(f"{i:>6}  {repr(line)}" for i, line in enumerate(filtered_lines, start_line))
                 else:
