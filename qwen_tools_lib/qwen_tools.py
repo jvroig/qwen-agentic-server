@@ -245,6 +245,49 @@ def get_tools_dict():
                 ],
                 "returns": "String - The output of the execution or an error message if execution fails"
             }
+        },
+        
+        "sqlite_tools": {
+            "sqlite_connect": {
+                "description": "Connect to a SQLite database file and verify the connection",
+                "parameters": [
+                    {"name": "database_path", "required": True, "type": "string", "description": "Path to the SQLite database file"}
+                ],
+                "returns": "String - confirmation message with basic database info, or error message if connection fails"
+            },
+            "sqlite_execute_query": {
+                "description": "Execute a SELECT query on SQLite database (read-only operations)",
+                "parameters": [
+                    {"name": "database_path", "required": True, "type": "string", "description": "Path to the SQLite database file"},
+                    {"name": "query", "required": True, "type": "string", "description": "SQL SELECT query to execute"},
+                    {"name": "limit", "required": False, "type": "integer", "description": "Maximum number of rows to return (defaults to 1000)"},
+                    {"name": "timeout", "required": False, "type": "integer", "description": "Query timeout in seconds (defaults to 30)"}
+                ],
+                "returns": "String - JSON formatted results with columns and rows, or error message if execution fails"
+            },
+            "sqlite_execute_command": {
+                "description": "Execute INSERT, UPDATE, DELETE, or DDL commands on SQLite database",
+                "parameters": [
+                    {"name": "database_path", "required": True, "type": "string", "description": "Path to the SQLite database file"},
+                    {"name": "command", "required": True, "type": "string", "description": "SQL command to execute (INSERT, UPDATE, DELETE, CREATE, DROP, etc.)"},
+                    {"name": "timeout", "required": False, "type": "integer", "description": "Command timeout in seconds (defaults to 30)"}
+                ],
+                "returns": "String - confirmation message with affected rows count, or error message if execution fails"
+            },
+            "sqlite_get_schema": {
+                "description": "Get the complete database schema including all tables, columns, and their types",
+                "parameters": [
+                    {"name": "database_path", "required": True, "type": "string", "description": "Path to the SQLite database file"}
+                ],
+                "returns": "String - JSON formatted schema information, or error message if retrieval fails"
+            },
+            "sqlite_list_tables": {
+                "description": "List all tables and views in the SQLite database",
+                "parameters": [
+                    {"name": "database_path", "required": True, "type": "string", "description": "Path to the SQLite database file"}
+                ],
+                "returns": "String - JSON formatted list of tables and views, or error message if retrieval fails"
+            }
         }
     }
     
