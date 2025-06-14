@@ -3,6 +3,7 @@ from flask_cors import CORS
 from openai import OpenAI
 import os
 import json
+import time
 import qwen_tools_lib
 
 from http import HTTPStatus
@@ -17,6 +18,7 @@ load_dotenv()
 api_key    = os.getenv('USE_API_KEY')
 base_url   = os.getenv('USE_BASE_URL')
 model_name = os.getenv('MODEL_NAME')
+delay_secs = os.getenv('RATE_LIMIT_PAUSE_SECS')
 
 @app.route('/api/chat', methods=['POST'])
 def query_endpoint():
@@ -47,6 +49,9 @@ def query_endpoint():
 
 def inference_loop(messages, temperature=0.7, max_tokens=1000):
     while True:
+        #Slight pause for rate limit observance
+        time.sleep(delay_secs)
+
         client = OpenAI(
             api_key=api_key,
             base_url=base_url
