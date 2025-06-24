@@ -4,6 +4,8 @@ from openai import OpenAI
 import os
 import json
 import time
+import argparse
+import sys
 import qwen_tools_lib
 
 from http import HTTPStatus
@@ -12,13 +14,58 @@ from dotenv import load_dotenv
 app = Flask(__name__)
 CORS(app)
 
-# Load API Key
-load_dotenv()
+# Global variables to store configuration
+api_key = None
+base_url = None
+model_name = None
+delay_secs = None
+port = None
 
-api_key    = os.getenv('USE_API_KEY')
-base_url   = os.getenv('USE_BASE_URL')
-model_name = os.getenv('MODEL_NAME')
-delay_secs = int(os.getenv('RATE_LIMIT_PAUSE_SECS'))
+def load_configuration():
+    """Load configuration from command line arguments with .env fallback"""
+    global api_key, base_url, model_name, delay_secs, port
+    
+    parser = argparse.ArgumentParser(description='Qwen API Server')
+    parser.add_argument('--api-key', type=str, help='API key for the service')
+    parser.add_argument('--base-url', type=str, help='Base URL for the API endpoint')
+    parser.add_argument('--model', type=str, help='Model name to use')
+    parser.add_argument('--rate-limit', type=int, help='Rate limit pause in seconds')
+    parser.add_argument('--port', type=int, default=5002, help='Port to run the server on (default: 5002)')
+    parser.add_argument('--debug', action='store_true', help='Run in debug mode')
+    
+    args = parser.parse_args()
+    
+    # Load .env file as fallback
+    load_dotenv()
+    
+    # Use command line arguments if provided, otherwise fall back to .env
+    api_key = args.api_key or os.getenv('USE_API_KEY')
+    base_url = args.base_url or os.getenv('USE_BASE_URL') 
+    model_name = args.model or os.getenv('MODEL_NAME')
+    delay_secs = args.rate_limit or int(os.getenv('RATE_LIMIT_PAUSE_SECS', 2))
+    port = args.port
+    
+    # Validate required parameters
+    if not api_key:
+        print("Error: API key is required. Provide via --api-key or USE_API_KEY in .env")
+        sys.exit(1)
+    if not base_url:
+        print("Error: Base URL is required. Provide via --base-url or USE_BASE_URL in .env")
+        sys.exit(1)
+    if not model_name:
+        print("Error: Model name is required. Provide via --model or MODEL_NAME in .env")
+        sys.exit(1)
+    
+    print(f"Configuration loaded:")
+    print(f"  API Key: {'*' * len(api_key[:-4]) + api_key[-4:] if len(api_key) > 4 else '***'}")
+    print(f"  Base URL: {base_url}")
+    print(f"  Model: {model_name}")
+    print(f"  Rate Limit: {delay_secs}s")
+    print(f"  Port: {port}")
+    
+    return args.debug
+
+
 
 @app.route('/api/chat', methods=['POST'])
 def query_endpoint():
@@ -255,4 +302,5 @@ def execute_tool(tool_name, tool_input):
         raise ValueError(f"Error executing tool '{tool_name}': {e}")
 
 if __name__ == '__main__':
-    app.run(debug=True, port="5002")
+    debug_mode = load_configuration()
+    app.run(debug=debug_mode, port=port)
