@@ -384,3 +384,7 @@ Instead, just briefly summarize the results in 1-2 sentences.
 
 """
     return tools_format
+
+
+
+print(tools_to_string(get_tools_dict()))
