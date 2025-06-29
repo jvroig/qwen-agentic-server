@@ -2,6 +2,51 @@
 
 This document describes all available tools and their usage.
 
+## Table of Contents
+
+### [File System Operations](#file-system-operations)
+- [get_cwd](#get_cwd) - Get the current working directory
+- [read_file](#read_file) - Read a file with optional formatting options
+- [write_file](#write_file) - Write content to a file
+- [append_file](#append_file) - Append content to an existing file
+- [edit_file](#edit_file) - Make line-based edits to a file
+- [copy_file](#copy_file) - Copy a file from source to destination
+- [remove_file](#remove_file) - Remove/delete a single file
+
+### [Directory Operations](#directory-operations)
+- [create_directory](#create_directory) - Create a new directory
+- [list_directory](#list_directory) - List the contents of a directory
+- [remove_directory](#remove_directory) - Remove/delete a directory and all its contents
+- [copy_directory](#copy_directory) - Copy a directory and all its contents
+
+### [Git Operations](#git-operations)
+- [git_clone](#git_clone) - Clone a git repository using HTTPS
+- [git_commit](#git_commit) - Stage all changes and create a commit
+- [git_restore](#git_restore) - Restore the repository or specific files to a previous state
+- [git_push](#git_push) - Push commits to a remote repository
+- [git_log](#git_log) - Get the commit history of the repository
+- [git_show](#git_show) - Get detailed information about a specific commit
+- [git_status](#git_status) - Get the current status of the repository
+- [git_diff](#git_diff) - Get the differences between commits, staged changes, or working directory
+
+### [Web Operations](#web-operations)
+- [brave_web_search](#brave_web_search) - Search the web using Brave Search API
+- [fetch_web_page](#fetch_web_page) - Fetch content from a specified URL
+
+### [Python Operations](#python-operations)
+- [python_execute_file](#python_execute_file) - Execute a Python file and return its output
+- [python_check_syntax](#python_check_syntax) - Check the syntax of Python code
+- [python_execute_code](#python_execute_code) - Execute arbitrary Python code and return its output
+
+### [SQLite Database Operations](#sqlite-database-operations)
+- [sqlite_connect](#sqlite_connect) - Connect to a SQLite database file and verify the connection
+- [sqlite_execute_query](#sqlite_execute_query) - Execute a SELECT query on SQLite database (read-only operations)
+- [sqlite_execute_command](#sqlite_execute_command) - Execute INSERT, UPDATE, DELETE, or DDL commands on SQLite database
+- [sqlite_get_schema](#sqlite_get_schema) - Get the complete database schema including all tables, columns, and their types
+- [sqlite_list_tables](#sqlite_list_tables) - List all tables and views in the SQLite database
+
+---
+
 ## File System Operations
 
 ### get_cwd
