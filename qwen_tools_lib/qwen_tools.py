@@ -384,6 +384,12 @@ def get_tools_format():
     Returns:
         str: Instructions for how to format tool calls.
     """
+    import os
+    
+    # Check if Harmony mode is enabled to include Harmony-specific examples
+    use_harmony = os.getenv('USE_OPENAI_HARMONY', 'false').lower() == 'true'
+    
+    ##Section 1: Universal tool calling
     tools_format = """
 
 When you want to use a tool, make a tool call (no explanations) using this exact format:
@@ -449,7 +455,11 @@ Assistant:
 [[qwen-tool-end]]
 **********************
 
-For the "analysis" and "commentary" channels: 
+"""
+
+    #Section 2: Harmony-specific
+    if use_harmony:
+        tools_format += """For the "analysis" and "commentary" channels: 
 - Use the same tool calling format as above when you need to use tools during "analysis" and "commentary" channels, and all problem-solving steps. 
 - Always use the [[qwen-tool-start]] tag as part of the message to call the tool.
 - Example:
@@ -471,9 +481,10 @@ CONSTRAINT: ONLY ONE TOOL CALL IS ALLOWED PER MESSAGE
     <|channel|>analysis<|message|>Now write JSON file.<|end|><|start|>assistant<|channel|>commentary to=tool.run code<|message|>[[qwen-tool-start]]\n```\n{\n    \"name\": \"write_file\",\n    \"input\": {\n        \"path\": \"/example/path/to/big_orders_count.json\",\n        \"content\": \"{\\n  \\\"num_big_orders\\\": 1\\n}\"\n    }\n}\n```\n[[qwen-tool-end]]
     ************
 
+    """
 
-
-Immediately end your response after calling a tool and the final triple backticks.
+    #Section 3: Final universal constraints
+    tools_format += """Immediately end your response after calling a tool and the final triple backticks.
 
 NOTE: User messages that start with "Tool result:" are actually TOOL MESSAGES (automated, from tool execution) and do not come from the user.
 
