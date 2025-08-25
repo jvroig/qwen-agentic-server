@@ -125,7 +125,11 @@ def inference_loop(messages, temperature=0.7, max_tokens=1000):
 
         # Iterate through the streaming response
         for chunk in response:
-            if chunk.choices[0].delta.content is not None:
+            # Handle edge cases where choices might be empty or missing delta
+            if not chunk.choices or not hasattr(chunk.choices[0], 'delta') or not chunk.choices[0].delta:
+                continue
+                
+            if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
                 # Get the text chunk
                 content = chunk.choices[0].delta.content
                 
@@ -169,16 +173,26 @@ def inference_loop(messages, temperature=0.7, max_tokens=1000):
                 tool_input = tool_call_data.get("input", {})
                 print(f"Executing tool: {tool_name} with input: {tool_input}")
                 
-                # Assume `execute_tool` is a predefined function
-                tool_result = execute_tool(tool_name, tool_input)
-
-                # Add the tool result as a "user" message in the conversation
-                tool_message = f"Tool result: ```{tool_result}```"
-                messages.append({"role": "user", "content": tool_message})
-                print(f"Tool executed. Result: {tool_result}")
-
-                # Stream the tool result back to the frontend
-                yield json.dumps({'role': 'tool_call', 'content': tool_message}) + "\n"
+                try:
+                    # Execute the tool
+                    tool_result = execute_tool(tool_name, tool_input)
+                    print(f"Tool executed. Result: {tool_result}")
+                    
+                    # Add the tool result as a "user" message in the conversation
+                    tool_message = f"Tool result: ```{tool_result}```"
+                    messages.append({"role": "user", "content": tool_message})
+                    
+                    # Stream the tool result back to the frontend
+                    yield json.dumps({'role': 'tool_call', 'content': tool_message}) + "\n"
+                    
+                except Exception as e:
+                    # Handle tool execution errors gracefully - don't crash the connection
+                    error_message = f"Tool execution error: {str(e)}"
+                    print(f"Tool execution failed: {e}")
+                    
+                    # Add error message to conversation so LLM can see it and adapt
+                    messages.append({"role": "user", "content": error_message})
+                    yield json.dumps({'role': 'tool_call', 'content': error_message}) + "\n"
 
         else:
             # If no tool call, terminate the loop

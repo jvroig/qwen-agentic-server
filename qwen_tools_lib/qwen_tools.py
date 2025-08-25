@@ -387,7 +387,7 @@ def get_tools_format():
     import os
     
     # Check if Harmony mode is enabled to include Harmony-specific examples
-    use_harmony = os.getenv('USE_OPENAI_HARMONY', 'false').lower() == 'true'
+    use_harmony = os.getenv('USE_OPENAI_HARMONY', 'false')
     
     ##Section 1: Universal tool calling
     tools_format = """
@@ -458,7 +458,7 @@ Assistant:
 """
 
     #Section 2: Harmony-specific
-    if use_harmony:
+    if use_harmony == 'true':
         tools_format += """For the "analysis" and "commentary" channels: 
 - Use the same tool calling format as above when you need to use tools during "analysis" and "commentary" channels, and all problem-solving steps. 
 - Always use the [[qwen-tool-start]] tag as part of the message to call the tool.
