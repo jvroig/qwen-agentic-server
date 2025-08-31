@@ -38,7 +38,12 @@ def generate_bash_script():
 
     commands.append(f"source {activate_script}")
     commands.append(f"{pip_path} install -r requirements.txt")
-    commands.append(f"{python_path} qwen_api.py")
+    commands.append(f"""# Pass model name if provided as first argument
+if [ -n "$1" ]; then
+    {python_path} qwen_api.py --model "$1"
+else
+    {python_path} qwen_api.py
+fi""")
 
     return "\n".join(commands)
 
