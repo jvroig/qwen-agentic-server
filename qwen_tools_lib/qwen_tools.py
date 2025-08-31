@@ -392,10 +392,9 @@ def get_tools_format():
     ##Section 1: Universal tool calling
     tools_format = """
 
-When you want to use a tool, make a tool call (no explanations) using this exact format:
+When you want to use a tool, make a tool call using this exact format:
 
-[[qwen-tool-start]]
-```
+<tool_call>
 {
     "name": "tool_name",
     "input": {
@@ -403,23 +402,18 @@ When you want to use a tool, make a tool call (no explanations) using this exact
         "param2": "value2"
     }
 }
-```
-[[qwen-tool-end]]
-
-Note that the triple backticks (```) are part of the format!
+</tool_call>
 
 Example 1:
 ************************
 User: What is your current working directory?
 Assistant:
-[[qwen-tool-start]]
-```
+<tool_call>
 {
     "name": "get_cwd",
     "input": ""
 }
-```
-[[qwen-tool-end]]
+</tool_call>
 **********************
 
 
@@ -427,33 +421,30 @@ Example 2:
 ************************
 User: List the files in your current working directory.
 Assistant:
-[[qwen-tool-start]]
-```
+<tool_call>
 {
     "name": "list_directory",
     "input": {
         "path": "."
     }
 }
-```
-[[qwen-tool-end]]
+</tool_call>
 **********************
 
 Example 3:
 ************************
 User: Can you check the syntax of my Python code?
 Assistant:
-[[qwen-tool-start]]
-```
+<tool_call>
 {
     "name": "python_check_syntax",
     "input": {
         "code": "print('Hello world'"
     }
 }
-```
-[[qwen-tool-end]]
+</tool_call>
 **********************
+
 
 """
 
@@ -461,24 +452,24 @@ Assistant:
     if use_harmony == 'true':
         tools_format += """For the "analysis" and "commentary" channels: 
 - Use the same tool calling format as above when you need to use tools during "analysis" and "commentary" channels, and all problem-solving steps. 
-- Always use the [[qwen-tool-start]] tag as part of the message to call the tool.
+- Always use the <tool_call> tag as part of the message to call the tool.
 - Example:
     ***********
      Assistant:
-     <|channel|>analysis<|message|>We need to query SQLite database. Use sqlite_execute_query. Query: SELECT COUNT(*) FROM orders JOIN customers ON orders.customer_id=customers.id WHERE orders.amount>50000 AND customers.department='Engineering'. Path: /example/path/to/tale.db. Then write JSON file with key num_big_orders. Use write_file.<|end|><|start|>assistant<|channel|>commentary to=tool.run code<|message|>[[qwen-tool-start]]\n```\n{\n    \"name\": \"sqlite_execute_query\",\n    \"input\": {\n        \"database_path\": \"/example/path/to/tale.db\",\n        \"query\": \"SELECT COUNT(*) AS num_big_orders FROM orders JOIN customers ON orders.customer_id=customers.id WHERE orders.amount>50000 AND customers.department='Engineering';\",\n        \"limit\": 1000\n    }\n}\n```\n[[qwen-tool-end]]
+     <|channel|>analysis<|message|>We need to query SQLite database. Use sqlite_execute_query. Query: SELECT COUNT(*) FROM orders JOIN customers ON orders.customer_id=customers.id WHERE orders.amount>50000 AND customers.department='Engineering'. Path: /example/path/to/tale.db. Then write JSON file with key num_big_orders. Use write_file.<|end|><|start|>assistant<|channel|>commentary to=tool.run code<|message|><tool_call>\n```\n{\n    \"name\": \"sqlite_execute_query\",\n    \"input\": {\n        \"database_path\": \"/example/path/to/tale.db\",\n        \"query\": \"SELECT COUNT(*) AS num_big_orders FROM orders JOIN customers ON orders.customer_id=customers.id WHERE orders.amount>50000 AND customers.department='Engineering';\",\n        \"limit\": 1000\n    }\n}\n```\n</tool_call>
     ************
 
 CONSTRAINT: ONLY ONE TOOL CALL IS ALLOWED PER MESSAGE
-- This includes any appearance of the [[qwen-tool-start]] before your final <|message|>
+- This includes any appearance of the <tool_call> before your final <|message|>
 - For example, this will fail:
     ***********
     Assistant:
-    <|channel|>analysis<|message|>Now write JSON file. I should use [[qwen-tool-start]]\n```\n{\n    \"name\": \"write_file\",\n    \"input\": {\n        \"path\": \"/example/path/to/big_orders_count.json\",\n        \"content\": \"{\\n  \\\"num_big_orders\\\": 1\\n}\"\n    }\n}\n```\n[[qwen-tool-end]]<|end|><|start|>assistant<|channel|>commentary to=tool.run code<|message|>[[qwen-tool-start]]\n```\n{\n    \"name\": \"write_file\",\n    \"input\": {\n        \"path\": \"/example/path/to/big_orders_count.json\",\n        \"content\": \"{\\n  \\\"num_big_orders\\\": 1\\n}\"\n    }\n}\n```\n[[qwen-tool-end]]
+    <|channel|>analysis<|message|>Now write JSON file. I should use <tool_call>\n```\n{\n    \"name\": \"write_file\",\n    \"input\": {\n        \"path\": \"/example/path/to/big_orders_count.json\",\n        \"content\": \"{\\n  \\\"num_big_orders\\\": 1\\n}\"\n    }\n}\n```\n</tool_call><|end|><|start|>assistant<|channel|>commentary to=tool.run code<|message|><tool_call>\n```\n{\n    \"name\": \"write_file\",\n    \"input\": {\n        \"path\": \"/example/path/to/big_orders_count.json\",\n        \"content\": \"{\\n  \\\"num_big_orders\\\": 1\\n}\"\n    }\n}\n```\n</tool_call>
     ************
-- To avoid that, only use [[qwen-tool-start]] for the final message, like this:
+- To avoid that, only use <tool_call> for the final message, like this:
     ***********
     Assistant:
-    <|channel|>analysis<|message|>Now write JSON file.<|end|><|start|>assistant<|channel|>commentary to=tool.run code<|message|>[[qwen-tool-start]]\n```\n{\n    \"name\": \"write_file\",\n    \"input\": {\n        \"path\": \"/example/path/to/big_orders_count.json\",\n        \"content\": \"{\\n  \\\"num_big_orders\\\": 1\\n}\"\n    }\n}\n```\n[[qwen-tool-end]]
+    <|channel|>analysis<|message|>Now write JSON file.<|end|><|start|>assistant<|channel|>commentary to=tool.run code<|message|><tool_call>\n```\n{\n    \"name\": \"write_file\",\n    \"input\": {\n        \"path\": \"/example/path/to/big_orders_count.json\",\n        \"content\": \"{\\n  \\\"num_big_orders\\\": 1\\n}\"\n    }\n}\n```\n</tool_call>
     ************
 
     """
@@ -487,9 +478,6 @@ CONSTRAINT: ONLY ONE TOOL CALL IS ALLOWED PER MESSAGE
     tools_format += """Immediately end your response after calling a tool and the final triple backticks.
 
 NOTE: User messages that start with "Tool result:" are actually TOOL MESSAGES (automated, from tool execution) and do not come from the user.
-
-After receiving the results of a tool call, do not parrot everything back to the user.
-Instead, just briefly summarize the results in 1-2 sentences.
 
 """
     return tools_format
