@@ -42,7 +42,7 @@ def load_configuration():
     api_key = args.api_key or os.getenv('USE_API_KEY')
     base_url = args.base_url or os.getenv('USE_BASE_URL') 
     model_name = args.model or os.getenv('MODEL_NAME')
-    delay_secs = args.rate_limit or int(os.getenv('RATE_LIMIT_PAUSE_SECS', 2))
+    delay_secs = args.rate_limit or int(os.getenv('RATE_LIMIT_PAUSE_SECS', 0))
     port = args.port
     
     # Validate required parameters
@@ -74,7 +74,7 @@ def query_endpoint():
         payload = request.get_json()
         messages = payload.get('messages', [])
         temperature = float(payload.get('temperature', 0.7))
-        max_output_tokens = int(payload.get('max_output_tokens', 1000))
+        max_output_tokens = int(payload.get('max_output_tokens', 5000))
 
         # Format messages (you can replace this with your actual logic)
         data = format_messages(messages)
