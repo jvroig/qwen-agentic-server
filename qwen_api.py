@@ -42,7 +42,7 @@ def load_configuration():
     api_key = args.api_key or os.getenv('USE_API_KEY')
     base_url = args.base_url or os.getenv('USE_BASE_URL') 
     model_name = args.model or os.getenv('MODEL_NAME')
-    delay_secs = args.rate_limit or int(os.getenv('RATE_LIMIT_PAUSE_SECS', 2))
+    delay_secs = args.rate_limit or int(os.getenv('RATE_LIMIT_PAUSE_SECS', 0))
     port = args.port
     
     # Validate required parameters
@@ -74,7 +74,7 @@ def query_endpoint():
         payload = request.get_json()
         messages = payload.get('messages', [])
         temperature = float(payload.get('temperature', 0.7))
-        max_output_tokens = int(payload.get('max_output_tokens', 1000))
+        max_output_tokens = int(payload.get('max_output_tokens', 5000))
 
         # Format messages (you can replace this with your actual logic)
         data = format_messages(messages)
@@ -169,16 +169,26 @@ def inference_loop(messages, temperature=0.7, max_tokens=1000):
                 tool_input = tool_call_data.get("input", {})
                 print(f"Executing tool: {tool_name} with input: {tool_input}")
                 
-                # Assume `execute_tool` is a predefined function
-                tool_result = execute_tool(tool_name, tool_input)
-
-                # Add the tool result as a "user" message in the conversation
-                tool_message = f"Tool result: ```{tool_result}```"
-                messages.append({"role": "user", "content": tool_message})
-                print(f"Tool executed. Result: {tool_result}")
-
-                # Stream the tool result back to the frontend
-                yield json.dumps({'role': 'tool_call', 'content': tool_message}) + "\n"
+                try:
+                    # Execute the tool
+                    tool_result = execute_tool(tool_name, tool_input)
+                    print(f"Tool executed. Result: {tool_result}")
+                    
+                    # Add the tool result as a "user" message in the conversation
+                    tool_message = f"Tool result: ```{tool_result}```"
+                    messages.append({"role": "user", "content": tool_message})
+                    
+                    # Stream the tool result back to the frontend
+                    yield json.dumps({'role': 'tool_call', 'content': tool_message}) + "\n"
+                    
+                except Exception as e:
+                    # Handle tool execution errors gracefully - don't crash the connection
+                    error_message = f"Tool execution error: {str(e)}"
+                    print(f"Tool execution failed: {e}")
+                    
+                    # Add error message to conversation so LLM can see it and adapt
+                    messages.append({"role": "user", "content": error_message})
+                    yield json.dumps({'role': 'tool_call', 'content': error_message}) + "\n"
 
         else:
             # If no tool call, terminate the loop
