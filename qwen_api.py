@@ -109,7 +109,7 @@ def inference_loop(messages, temperature=0.7, max_tokens=1000):
             stream=True,
             stop=["[[qwen-tool-end]]"],
             temperature=temperature,
-            max_tokens=max_tokens
+            #max_tokens=max_tokens    #Remove this to allow uncapped token generation up to max_context for reasoning models
         )
 
         # # Extract the assistant's response
