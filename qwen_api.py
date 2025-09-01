@@ -107,7 +107,6 @@ def inference_loop(messages, temperature=0.7, max_tokens=1000):
             model=model_name,
             messages=messages,
             stream=True,
-            stop=["[[qwen-tool-end]]"],
             temperature=temperature,
             #max_tokens=max_tokens    #Remove this to allow uncapped token generation up to max_context for reasoning models
         )
@@ -146,7 +145,7 @@ def inference_loop(messages, temperature=0.7, max_tokens=1000):
         yield json.dumps({'role': 'assistant', 'content': '', 'type': 'done'}) + "\n"
 
 
-        occurrences = assistant_response.count("[[qwen-tool-start]]")
+        occurrences = assistant_response.count("<tool_call>")
         if occurrences > 1:
             #Multiple tool calls are not allowed
             ToolErrorMsg="Tool Call Error: Multiple tool calls found. Please only use one tool at a time."
@@ -238,7 +237,7 @@ def parse_tool_call(response):
         ValueError: If the tool call format is invalid or cannot be parsed.
     """
     # Define markers for the tool call block
-    start_marker_pos = response.find("[[qwen-tool-start]]")
+    start_marker_pos = response.find("<tool_call>")
     
     try:
         if start_marker_pos == -1:
