@@ -139,7 +139,9 @@ def inference_loop(messages, temperature=0.7, max_tokens=1000):
                 yield json.dumps({'role': 'assistant', 'content': content, 'type': 'chunk'}) + "\n"
 
         # After streaming is complete, add the full response to messages
-        messages.append({"role": "assistant", "content": assistant_response})
+        # Clean the response to remove thinking tags before adding to conversation context
+        cleaned_response = strip_thinking_tags(assistant_response)
+        messages.append({"role": "assistant", "content": cleaned_response})
 
         # Send a completion signal
         yield json.dumps({'role': 'assistant', 'content': '', 'type': 'done'}) + "\n"
@@ -196,6 +198,49 @@ def inference_loop(messages, temperature=0.7, max_tokens=1000):
         else:
             # If no tool call, terminate the loop
             break
+
+def strip_thinking_tags(text):
+    """
+    Remove thinking tags from assistant responses for cleaner conversation context.
+    
+    Handles various thinking tag formats and orphaned closing tags (common with Qwen models).
+    This ensures LLM doesn't see its own reasoning tokens in subsequent conversation rounds.
+    
+    Args:
+        text (str): Raw assistant response that may contain thinking tags
+        
+    Returns:
+        str: Cleaned response with thinking tags removed
+    """
+    import re
+    
+    if not text:
+        return text
+    
+    # Remove common thinking tag patterns
+    patterns = [
+        r'<think>.*?</think>',
+        r'<thinking>.*?</thinking>', 
+        r'<reasoning>.*?</reasoning>',
+        r'<thought>.*?</thought>',
+        r'<internal>.*?</internal>',
+        r'<reflection>.*?</reflection>',
+        r'<analysis>.*?</analysis>'
+    ]
+    
+    cleaned = text
+    for pattern in patterns:
+        cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE | re.DOTALL)
+    
+    # Handle orphaned closing tags (e.g., Qwen models that emit </think> without <think>)
+    orphaned_pattern = r'.*?</think>'
+    orphaned_matches = list(re.finditer(orphaned_pattern, cleaned, flags=re.IGNORECASE))
+    if orphaned_matches:
+        # Take everything after the last </think> tag
+        last_match = orphaned_matches[-1]
+        cleaned = cleaned[last_match.end():]
+    
+    return cleaned.strip()
 
 def format_messages(messages):
     model = ''
