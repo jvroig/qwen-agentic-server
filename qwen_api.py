@@ -293,7 +293,7 @@ def format_messages(messages):
     tools_format = qwen_tools_lib.get_tools_format()
     print(tools_available)
     print(tools_format)
-    system_prompt = f"""You are an advanced AI model deployed for autonomous execution. You will be given tasks that you should complete autonomously, using tools available to you. You will not be able to ask the user for clarifications due to being in an autonomous environment without user supervision. You will have to rely on your own reasoning and the available tools.
+    system_prompt = f"""You are Qwen-Max, an advanced AI model. You will assist the user with tasks. You can use tools when needed.
 
 You have the following tools available:
 <tools>
@@ -301,8 +301,6 @@ You have the following tools available:
 </tools>
 
 {tools_format}
-
-Remember that you are in an environment without user supervision and cannot ask for clarifications. User messages that you receive are actually automated messages, like task instructions and tool results, instead of real user responses or supervision. You must do your best to accomplish the task using your own understanding, intelligence, and tools.
 
 """
     system_message = {"role": "system", "content": system_prompt}

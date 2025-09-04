@@ -404,47 +404,25 @@ When you want to use a tool, make a tool call using this exact format:
 }
 </tool_call>
 
-Example 1:
-************************
-User: What is your current working directory?
-Assistant:
+For example, if you need to use a tool called "sample_tool" and want to pass the value "Hello World" to its parameter called "sample_greeting_param", then you would do:
+
 <tool_call>
 {
-    "name": "get_cwd",
+    "name": "sample_tool",
+    "input": {
+        "sample_greeting_param": "Hello World"
+    }
+}
+</tool_call>
+
+If a tool does not require any parameters, you can use an empty string ("") as the value for the input property. For example, if a tool called "no_param_tool" needs no params, you can call it like this:
+
+<tool_call>
+{
+    "name": "no_param_tool",
     "input": ""
 }
 </tool_call>
-**********************
-
-
-Example 2:
-************************
-User: List the files in your current working directory.
-Assistant:
-<tool_call>
-{
-    "name": "list_directory",
-    "input": {
-        "path": "."
-    }
-}
-</tool_call>
-**********************
-
-Example 3:
-************************
-User: Can you check the syntax of my Python code?
-Assistant:
-<tool_call>
-{
-    "name": "python_check_syntax",
-    "input": {
-        "code": "print('Hello world'"
-    }
-}
-</tool_call>
-**********************
-
 
 """
 
@@ -475,7 +453,7 @@ CONSTRAINT: ONLY ONE TOOL CALL IS ALLOWED PER MESSAGE
     """
 
     #Section 3: Final universal constraints
-    tools_format += """Immediately end your response after calling a tool and the final triple backticks.
+    tools_format += """Immediately end your response after calling a tool.
 
 NOTE: User messages that start with "Tool result:" are actually TOOL MESSAGES (automated, from tool execution) and do not come from the user.
 
