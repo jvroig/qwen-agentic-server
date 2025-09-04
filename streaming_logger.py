@@ -26,14 +26,11 @@ class StreamingLogger:
         if not self.enabled:
             return
             
-        # Setup directories
+        # Setup directory (flat structure - no subfolders)
         self.base_dir = 'logs/streaming'
-        self.active_dir = os.path.join(self.base_dir, 'active')
-        self.completed_dir = os.path.join(self.base_dir, 'completed')
         
-        # Create directories
-        os.makedirs(self.active_dir, exist_ok=True)
-        os.makedirs(self.completed_dir, exist_ok=True)
+        # Create directory
+        os.makedirs(self.base_dir, exist_ok=True)
         
         # Session management
         self.session_buffers = defaultdict(list)  # session_id -> list of chunks
@@ -47,15 +44,14 @@ class StreamingLogger:
         self.flush_thread = threading.Thread(target=self._flush_worker, daemon=True)
         self.flush_thread.start()
     
-    def _get_session_file_path(self, session_id: str, active: bool = True) -> str:
+    def _get_session_file_path(self, session_id: str) -> str:
         """Get file path for session log"""
-        directory = self.active_dir if active else self.completed_dir
-        return os.path.join(directory, f'{session_id}.log')
+        return os.path.join(self.base_dir, f'{session_id}.log')
     
     def _ensure_session_file(self, session_id: str):
         """Ensure session file is open and ready"""
         if session_id not in self.session_files:
-            file_path = self._get_session_file_path(session_id, active=True)
+            file_path = self._get_session_file_path(session_id)
             self.session_files[session_id] = open(file_path, 'a', encoding='utf-8')
     
     def _flush_session(self, session_id: str, force: bool = False):
@@ -107,7 +103,7 @@ class StreamingLogger:
             self.session_buffers[session_id].append(content)
     
     def complete_session(self, session_id: str):
-        """Mark session as complete and move log to completed directory"""
+        """Mark session as complete and delete streaming log file"""
         if not self.enabled or session_id not in self.session_files:
             return
             
@@ -115,26 +111,20 @@ class StreamingLogger:
         self._flush_session(session_id, force=True)
         
         with self.lock:
-            # Close active file
+            # Close and delete session file
             if session_id in self.session_files:
                 self.session_files[session_id].close()
                 del self.session_files[session_id]
             
-            # Move file from active to completed
-            active_path = self._get_session_file_path(session_id, active=True)
-            completed_path = self._get_session_file_path(session_id, active=False)
+            # Delete the streaming log file
+            file_path = self._get_session_file_path(session_id)
             
             try:
-                if os.path.exists(active_path):
-                    # Add timestamp to completed filename to avoid conflicts
-                    timestamp = time.strftime('%Y%m%d_%H%M%S')
-                    base_name = session_id
-                    completed_path = os.path.join(self.completed_dir, f'{base_name}_{timestamp}.log')
-                    
-                    os.rename(active_path, completed_path)
-                    print(f"Moved streaming log: {active_path} -> {completed_path}")
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    print(f"Deleted streaming log: {file_path}")
             except Exception as e:
-                print(f"Failed to move streaming log for {session_id}: {e}")
+                print(f"Failed to delete streaming log for {session_id}: {e}")
             
             # Clean up session data
             if session_id in self.session_buffers:
@@ -143,23 +133,20 @@ class StreamingLogger:
                 del self.last_flush[session_id]
     
     def cleanup_old_sessions(self, max_age_hours: int = 24):
-        """Clean up old active session files (in case of crashes)"""
+        """Delete old session files (in case of crashes or orphaned sessions)"""
         if not self.enabled:
             return
             
         cutoff_time = time.time() - (max_age_hours * 3600)
         
         try:
-            for filename in os.listdir(self.active_dir):
+            for filename in os.listdir(self.base_dir):
                 if filename.endswith('.log'):
-                    file_path = os.path.join(self.active_dir, filename)
+                    file_path = os.path.join(self.base_dir, filename)
                     if os.path.getmtime(file_path) < cutoff_time:
-                        # Move old active files to completed
-                        session_id = filename.replace('.log', '')
-                        timestamp = time.strftime('%Y%m%d_%H%M%S')
-                        completed_path = os.path.join(self.completed_dir, f'{session_id}_cleanup_{timestamp}.log')
-                        os.rename(file_path, completed_path)
-                        print(f"Cleaned up old active session: {file_path} -> {completed_path}")
+                        # Delete old session files directly
+                        os.remove(file_path)
+                        print(f"Cleaned up old session file: {file_path}")
         except Exception as e:
             print(f"Failed to cleanup old sessions: {e}")
 
