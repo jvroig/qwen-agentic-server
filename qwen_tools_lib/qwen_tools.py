@@ -415,12 +415,12 @@ For example, if you need to use a tool called "sample_tool" and want to pass the
 }
 </tool_call>
 
-If a tool does not require any parameters, you can use an empty string ("") as the value for the input property. For example, if a tool called "no_param_tool" needs no params, you can call it like this:
+If a tool does not require any parameters, you can use an empty object ({}) as the value for the input property. For example, if a tool called "no_param_tool" needs no params, you can call it like this:
 
 <tool_call>
 {
     "name": "no_param_tool",
-    "input": ""
+    "input": {}
 }
 </tool_call>
 

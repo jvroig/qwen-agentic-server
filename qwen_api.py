@@ -403,7 +403,7 @@ def execute_tool(tool_name, tool_input):
 
     try:
         # Execute the tool function with the provided input
-        if tool_input == "":
+        if not tool_input or tool_input == {}:
             result = tool()
         else:
             result = tool(**tool_input)
