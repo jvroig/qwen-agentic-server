@@ -179,7 +179,7 @@ def inference_loop(messages, temperature=0.7, max_tokens=1000, session_id=None):
         yield json.dumps({'role': 'assistant', 'content': '', 'type': 'done'}) + "\n"
 
 
-        occurrences = assistant_response.count("<tool_call>")
+        occurrences = cleaned_response.count("<tool_call>")
         if occurrences > 1:
             #Multiple tool calls are not allowed
             ToolErrorMsg="Tool Call Error: Multiple tool calls found. Please only use one tool at a time."
@@ -190,7 +190,7 @@ def inference_loop(messages, temperature=0.7, max_tokens=1000, session_id=None):
         elif occurrences == 1:
             tool_call_data = None
             try:
-                tool_call_data = parse_tool_call(assistant_response)
+                tool_call_data = parse_tool_call(cleaned_response)
             except:
                 print(f"No valid tool call found")
                 tool_message = f"Tool result: No valid tool call found. Please make sure tool request is valid JSON, and escape necessary characters. Try again with better-formatted JSON"
