@@ -9,9 +9,11 @@ import sys
 import qwen_tools_lib
 import uuid
 from datetime import datetime
+import time
 
 from http import HTTPStatus
 from dotenv import load_dotenv
+from inference_logger import get_logger
 
 app = Flask(__name__)
 CORS(app)
@@ -74,12 +76,17 @@ def query_endpoint():
     try:
         # Generate session ID for debugging
         session_id = f"sess_{uuid.uuid4().hex[:8]}"
+        logger = get_logger()
         
         # Parse JSON payload from the request
         payload = request.get_json()
         messages = payload.get('messages', [])
         temperature = float(payload.get('temperature', 0.7))
         max_output_tokens = int(payload.get('max_output_tokens', 5000))
+
+        # Log inference start
+        client_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR', 'unknown'))
+        logger.log_inference_start(session_id, client_ip, payload, model_name)
 
         # Format messages (you can replace this with your actual logic)
         data = format_messages(messages)
@@ -96,11 +103,18 @@ def query_endpoint():
 
     except Exception as e:
         # Handle errors gracefully
+        logger = get_logger()
+        if 'session_id' in locals():
+            logger.log_error(session_id, "endpoint_error", str(e))
         return {"error": str(e)}, 400
 
 
 def inference_loop(messages, temperature=0.7, max_tokens=1000, session_id=None):
+    logger = get_logger()
+    inference_round = 0
+    
     while True:
+        inference_round += 1
         #Slight pause for rate limit observance
         time.sleep(delay_secs)
 
@@ -124,11 +138,13 @@ def inference_loop(messages, temperature=0.7, max_tokens=1000, session_id=None):
 
         # FULL STREAMING CODE STUB
         assistant_response = ""
+        streaming_chunks = 0
 
         print(response)
 
         # Iterate through the streaming response
         for chunk in response:
+            streaming_chunks += 1
             # Handle edge cases where choices might be empty or missing delta
             if not chunk.choices or not hasattr(chunk.choices[0], 'delta') or not chunk.choices[0].delta:
                 continue
@@ -148,9 +164,10 @@ def inference_loop(messages, temperature=0.7, max_tokens=1000, session_id=None):
         cleaned_response = strip_thinking_tags(assistant_response)
         messages.append({"role": "assistant", "content": cleaned_response})
         
-        # Log thinking tag verification for debugging
+        # Log assistant response
         if session_id:
-            log_thinking_verification(session_id, assistant_response, cleaned_response)
+            logger.log_assistant_response(session_id, inference_round, assistant_response, 
+                                         cleaned_response, streaming_chunks)
 
         # Send a completion signal
         yield json.dumps({'role': 'assistant', 'content': '', 'type': 'done'}) + "\n"
@@ -184,9 +201,16 @@ def inference_loop(messages, temperature=0.7, max_tokens=1000, session_id=None):
                 print(f"Executing tool: {tool_name} with input: {tool_input}")
                 
                 try:
-                    # Execute the tool
+                    # Execute the tool with timing
+                    start_time = time.time()
                     tool_result = execute_tool(tool_name, tool_input)
+                    execution_time = (time.time() - start_time) * 1000  # Convert to milliseconds
+                    
                     print(f"Tool executed. Result: {tool_result}")
+                    
+                    # Log successful tool execution
+                    logger.log_tool_execution(session_id, tool_name, tool_input, 
+                                             tool_result, execution_time, success=True)
                     
                     # Add the tool result as a "user" message in the conversation
                     tool_message = f"Tool result: ```{tool_result}```"
@@ -197,8 +221,13 @@ def inference_loop(messages, temperature=0.7, max_tokens=1000, session_id=None):
                     
                 except Exception as e:
                     # Handle tool execution errors gracefully - don't crash the connection
+                    execution_time = (time.time() - start_time) * 1000 if 'start_time' in locals() else 0
                     error_message = f"Tool execution error: {str(e)}"
                     print(f"Tool execution failed: {e}")
+                    
+                    # Log failed tool execution
+                    logger.log_tool_execution(session_id, tool_name, tool_input, 
+                                             error_message, execution_time, success=False)
                     
                     # Add error message to conversation so LLM can see it and adapt
                     messages.append({"role": "user", "content": error_message})
@@ -206,6 +235,9 @@ def inference_loop(messages, temperature=0.7, max_tokens=1000, session_id=None):
 
         else:
             # If no tool call, terminate the loop
+            # Log session completion
+            if session_id:
+                logger.log_session_complete(session_id, "completed")
             break
 
 def strip_thinking_tags(text):
@@ -251,32 +283,7 @@ def strip_thinking_tags(text):
     
     return cleaned.strip()
 
-def log_thinking_verification(session_id, raw_response, cleaned_response):
-    """Quick log to verify thinking tag processing - writes to console and file"""
-    thinking_found = raw_response != cleaned_response
-    timestamp = datetime.now().isoformat()
-    
-    log_entry = {
-        "timestamp": timestamp,
-        "session_id": session_id,
-        "event": "thinking_verification", 
-        "raw_length": len(raw_response),
-        "cleaned_length": len(cleaned_response),
-        "thinking_tags_found": thinking_found,
-        "raw_response": raw_response[:500],  # First 500 chars for debugging
-        "cleaned_response": cleaned_response[:500]
-    }
-    
-    log_json = json.dumps(log_entry, indent=2)
-    print(f"\n=== THINKING TAG VERIFICATION ===\n{log_json}\n=== END VERIFICATION ===\n")
-    
-    # Also write to file
-    try:
-        os.makedirs('logs', exist_ok=True)
-        with open(f'logs/thinking_debug.jsonl', 'a') as f:
-            f.write(json.dumps(log_entry) + '\n')
-    except Exception as e:
-        print(f"Failed to write log file: {e}")
+# Old log_thinking_verification function removed - replaced by comprehensive logging in inference_logger.py
 
 def format_messages(messages):
     model = ''
