@@ -1,0 +1,29 @@
+{
+  "logging": {
+    "enabled": true,
+    "level": "INFO",
+    "payloads": {
+      "request_payloads": true,
+      "user_messages": true,
+      "assistant_responses": true
+    },
+    "destinations": {
+      "to_file": true,
+      "to_console": true,
+      "directory": "logs/"
+    },
+    "retention": {
+      "retention_days": 30,
+      "auto_cleanup": true
+    },
+    "privacy": {
+      "truncate_long_messages": false,
+      "max_message_length": 10000,
+      "redact_patterns": []
+    },
+    "performance": {
+      "async_logging": true,
+      "buffer_size": 1000
+    }
+  }
+}

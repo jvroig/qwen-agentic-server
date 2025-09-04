@@ -7,6 +7,8 @@ import time
 import argparse
 import sys
 import qwen_tools_lib
+import uuid
+from datetime import datetime
 
 from http import HTTPStatus
 from dotenv import load_dotenv
@@ -70,6 +72,9 @@ def load_configuration():
 @app.route('/api/chat', methods=['POST'])
 def query_endpoint():
     try:
+        # Generate session ID for debugging
+        session_id = f"sess_{uuid.uuid4().hex[:8]}"
+        
         # Parse JSON payload from the request
         payload = request.get_json()
         messages = payload.get('messages', [])
@@ -84,7 +89,7 @@ def query_endpoint():
 
         # Use a generator to stream responses back to the frontend
         def generate_responses():
-            yield from inference_loop(messages, temperature, max_output_tokens)
+            yield from inference_loop(messages, temperature, max_output_tokens, session_id)
 
         # Return a streaming response with the correct content type
         return Response(generate_responses(), content_type='text/event-stream')
@@ -94,7 +99,7 @@ def query_endpoint():
         return {"error": str(e)}, 400
 
 
-def inference_loop(messages, temperature=0.7, max_tokens=1000):
+def inference_loop(messages, temperature=0.7, max_tokens=1000, session_id=None):
     while True:
         #Slight pause for rate limit observance
         time.sleep(delay_secs)
@@ -142,6 +147,10 @@ def inference_loop(messages, temperature=0.7, max_tokens=1000):
         # Clean the response to remove thinking tags before adding to conversation context
         cleaned_response = strip_thinking_tags(assistant_response)
         messages.append({"role": "assistant", "content": cleaned_response})
+        
+        # Log thinking tag verification for debugging
+        if session_id:
+            log_thinking_verification(session_id, assistant_response, cleaned_response)
 
         # Send a completion signal
         yield json.dumps({'role': 'assistant', 'content': '', 'type': 'done'}) + "\n"
@@ -241,6 +250,33 @@ def strip_thinking_tags(text):
         cleaned = cleaned[last_match.end():]
     
     return cleaned.strip()
+
+def log_thinking_verification(session_id, raw_response, cleaned_response):
+    """Quick log to verify thinking tag processing - writes to console and file"""
+    thinking_found = raw_response != cleaned_response
+    timestamp = datetime.now().isoformat()
+    
+    log_entry = {
+        "timestamp": timestamp,
+        "session_id": session_id,
+        "event": "thinking_verification", 
+        "raw_length": len(raw_response),
+        "cleaned_length": len(cleaned_response),
+        "thinking_tags_found": thinking_found,
+        "raw_response": raw_response[:500],  # First 500 chars for debugging
+        "cleaned_response": cleaned_response[:500]
+    }
+    
+    log_json = json.dumps(log_entry, indent=2)
+    print(f"\n=== THINKING TAG VERIFICATION ===\n{log_json}\n=== END VERIFICATION ===\n")
+    
+    # Also write to file
+    try:
+        os.makedirs('logs', exist_ok=True)
+        with open(f'logs/thinking_debug.jsonl', 'a') as f:
+            f.write(json.dumps(log_entry) + '\n')
+    except Exception as e:
+        print(f"Failed to write log file: {e}")
 
 def format_messages(messages):
     model = ''
