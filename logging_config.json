@@ -25,5 +25,10 @@
       "async_logging": true,
       "buffer_size": 1000
     }
+  },
+  "streaming_logs": {
+    "enabled": true,
+    "flush_interval_seconds": 2,
+    "max_session_age_hours": 24
   }
 }

@@ -14,6 +14,7 @@ import time
 from http import HTTPStatus
 from dotenv import load_dotenv
 from inference_logger import get_logger
+from streaming_logger import get_streaming_logger
 
 app = Flask(__name__)
 CORS(app)
@@ -111,6 +112,7 @@ def query_endpoint():
 
 def inference_loop(messages, temperature=0.7, max_tokens=1000, session_id=None):
     logger = get_logger()
+    streaming_logger = get_streaming_logger()
     inference_round = 0
     
     while True:
@@ -152,6 +154,10 @@ def inference_loop(messages, temperature=0.7, max_tokens=1000, session_id=None):
             if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
                 # Get the text chunk
                 content = chunk.choices[0].delta.content
+                
+                # Log streaming content for real-time monitoring
+                if session_id:
+                    streaming_logger.append_chunk(session_id, content)
                 
                 # Accumulate the full response
                 assistant_response += content
@@ -235,9 +241,10 @@ def inference_loop(messages, temperature=0.7, max_tokens=1000, session_id=None):
 
         else:
             # If no tool call, terminate the loop
-            # Log session completion
+            # Log session completion and cleanup streaming logs
             if session_id:
                 logger.log_session_complete(session_id, "completed")
+                streaming_logger.complete_session(session_id)
             break
 
 def strip_thinking_tags(text):
