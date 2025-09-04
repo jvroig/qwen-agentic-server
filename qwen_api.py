@@ -7,9 +7,13 @@ import time
 import argparse
 import sys
 import qwen_tools_lib
+import uuid
+from datetime import datetime
+import time
 
 from http import HTTPStatus
 from dotenv import load_dotenv
+from inference_logger import get_logger
 
 app = Flask(__name__)
 CORS(app)
@@ -70,11 +74,19 @@ def load_configuration():
 @app.route('/api/chat', methods=['POST'])
 def query_endpoint():
     try:
+        # Generate session ID for debugging
+        session_id = f"sess_{uuid.uuid4().hex[:8]}"
+        logger = get_logger()
+        
         # Parse JSON payload from the request
         payload = request.get_json()
         messages = payload.get('messages', [])
         temperature = float(payload.get('temperature', 0.7))
         max_output_tokens = int(payload.get('max_output_tokens', 5000))
+
+        # Log inference start
+        client_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR', 'unknown'))
+        logger.log_inference_start(session_id, client_ip, payload, model_name)
 
         # Format messages (you can replace this with your actual logic)
         data = format_messages(messages)
@@ -84,18 +96,25 @@ def query_endpoint():
 
         # Use a generator to stream responses back to the frontend
         def generate_responses():
-            yield from inference_loop(messages, temperature, max_output_tokens)
+            yield from inference_loop(messages, temperature, max_output_tokens, session_id)
 
         # Return a streaming response with the correct content type
         return Response(generate_responses(), content_type='text/event-stream')
 
     except Exception as e:
         # Handle errors gracefully
+        logger = get_logger()
+        if 'session_id' in locals():
+            logger.log_error(session_id, "endpoint_error", str(e))
         return {"error": str(e)}, 400
 
 
-def inference_loop(messages, temperature=0.7, max_tokens=1000):
+def inference_loop(messages, temperature=0.7, max_tokens=1000, session_id=None):
+    logger = get_logger()
+    inference_round = 0
+    
     while True:
+        inference_round += 1
         #Slight pause for rate limit observance
         time.sleep(delay_secs)
 
@@ -107,9 +126,8 @@ def inference_loop(messages, temperature=0.7, max_tokens=1000):
             model=model_name,
             messages=messages,
             stream=True,
-            stop=["[[qwen-tool-end]]"],
             temperature=temperature,
-            max_tokens=max_tokens
+            #max_tokens=max_tokens    #Remove this to allow uncapped token generation up to max_context for reasoning models
         )
 
         # # Extract the assistant's response
@@ -120,12 +138,18 @@ def inference_loop(messages, temperature=0.7, max_tokens=1000):
 
         # FULL STREAMING CODE STUB
         assistant_response = ""
+        streaming_chunks = 0
 
         print(response)
 
         # Iterate through the streaming response
         for chunk in response:
-            if chunk.choices[0].delta.content is not None:
+            streaming_chunks += 1
+            # Handle edge cases where choices might be empty or missing delta
+            if not chunk.choices or not hasattr(chunk.choices[0], 'delta') or not chunk.choices[0].delta:
+                continue
+                
+            if hasattr(chunk.choices[0].delta, 'content') and chunk.choices[0].delta.content is not None:
                 # Get the text chunk
                 content = chunk.choices[0].delta.content
                 
@@ -136,13 +160,20 @@ def inference_loop(messages, temperature=0.7, max_tokens=1000):
                 yield json.dumps({'role': 'assistant', 'content': content, 'type': 'chunk'}) + "\n"
 
         # After streaming is complete, add the full response to messages
-        messages.append({"role": "assistant", "content": assistant_response})
+        # Clean the response to remove thinking tags before adding to conversation context
+        cleaned_response = strip_thinking_tags(assistant_response)
+        messages.append({"role": "assistant", "content": cleaned_response})
+        
+        # Log assistant response
+        if session_id:
+            logger.log_assistant_response(session_id, inference_round, assistant_response, 
+                                         cleaned_response, streaming_chunks)
 
         # Send a completion signal
         yield json.dumps({'role': 'assistant', 'content': '', 'type': 'done'}) + "\n"
 
 
-        occurrences = assistant_response.count("[[qwen-tool-start]]")
+        occurrences = assistant_response.count("<tool_call>")
         if occurrences > 1:
             #Multiple tool calls are not allowed
             ToolErrorMsg="Tool Call Error: Multiple tool calls found. Please only use one tool at a time."
@@ -170,9 +201,16 @@ def inference_loop(messages, temperature=0.7, max_tokens=1000):
                 print(f"Executing tool: {tool_name} with input: {tool_input}")
                 
                 try:
-                    # Execute the tool
+                    # Execute the tool with timing
+                    start_time = time.time()
                     tool_result = execute_tool(tool_name, tool_input)
+                    execution_time = (time.time() - start_time) * 1000  # Convert to milliseconds
+                    
                     print(f"Tool executed. Result: {tool_result}")
+                    
+                    # Log successful tool execution
+                    logger.log_tool_execution(session_id, tool_name, tool_input, 
+                                             tool_result, execution_time, success=True)
                     
                     # Add the tool result as a "user" message in the conversation
                     tool_message = f"Tool result: ```{tool_result}```"
@@ -183,8 +221,13 @@ def inference_loop(messages, temperature=0.7, max_tokens=1000):
                     
                 except Exception as e:
                     # Handle tool execution errors gracefully - don't crash the connection
+                    execution_time = (time.time() - start_time) * 1000 if 'start_time' in locals() else 0
                     error_message = f"Tool execution error: {str(e)}"
                     print(f"Tool execution failed: {e}")
+                    
+                    # Log failed tool execution
+                    logger.log_tool_execution(session_id, tool_name, tool_input, 
+                                             error_message, execution_time, success=False)
                     
                     # Add error message to conversation so LLM can see it and adapt
                     messages.append({"role": "user", "content": error_message})
@@ -192,7 +235,55 @@ def inference_loop(messages, temperature=0.7, max_tokens=1000):
 
         else:
             # If no tool call, terminate the loop
+            # Log session completion
+            if session_id:
+                logger.log_session_complete(session_id, "completed")
             break
+
+def strip_thinking_tags(text):
+    """
+    Remove thinking tags from assistant responses for cleaner conversation context.
+    
+    Handles various thinking tag formats and orphaned closing tags (common with Qwen models).
+    This ensures LLM doesn't see its own reasoning tokens in subsequent conversation rounds.
+    
+    Args:
+        text (str): Raw assistant response that may contain thinking tags
+        
+    Returns:
+        str: Cleaned response with thinking tags removed
+    """
+    import re
+    
+    if not text:
+        return text
+    
+    # Remove common thinking tag patterns
+    patterns = [
+        r'<think>.*?</think>',
+        r'<thinking>.*?</thinking>', 
+        r'<reasoning>.*?</reasoning>',
+        r'<thought>.*?</thought>',
+        r'<internal>.*?</internal>',
+        r'<reflection>.*?</reflection>',
+        r'<analysis>.*?</analysis>'
+    ]
+    
+    cleaned = text
+    for pattern in patterns:
+        cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE | re.DOTALL)
+    
+    # Handle orphaned closing tags (e.g., Qwen models that emit </think> without <think>)
+    orphaned_pattern = r'.*?</think>'
+    orphaned_matches = list(re.finditer(orphaned_pattern, cleaned, flags=re.IGNORECASE))
+    if orphaned_matches:
+        # Take everything after the last </think> tag
+        last_match = orphaned_matches[-1]
+        cleaned = cleaned[last_match.end():]
+    
+    return cleaned.strip()
+
+# Old log_thinking_verification function removed - replaced by comprehensive logging in inference_logger.py
 
 def format_messages(messages):
     model = ''
@@ -202,10 +293,12 @@ def format_messages(messages):
     tools_format = qwen_tools_lib.get_tools_format()
     print(tools_available)
     print(tools_format)
-    system_prompt = f"""You are Qwen-Max, an advanced AI model. You will assist the user with tasks, using tools available to you.
+    system_prompt = f"""You are Qwen-Max, an advanced AI model. You will assist the user with tasks. You can use tools when needed.
 
 You have the following tools available:
+<tools>
 {tools_available}
+</tools>
 
 {tools_format}
 
@@ -230,7 +323,7 @@ def parse_tool_call(response):
         ValueError: If the tool call format is invalid or cannot be parsed.
     """
     # Define markers for the tool call block
-    start_marker_pos = response.find("[[qwen-tool-start]]")
+    start_marker_pos = response.find("<tool_call>")
     
     try:
         if start_marker_pos == -1:

@@ -305,6 +305,78 @@ def list_tools():
     return tools_to_string(tools_dict)
 
 
+def get_harmony_tools_format():
+    """
+    Get the Harmony format for tool definitions and calling instructions.
+    
+    Returns:
+        str: Harmony-compatible tool definitions and instructions.
+    """
+    tools_dict = get_tools_dict()
+    
+    # Generate comprehensive tool definitions with detailed information
+    tool_definitions = []
+    
+    for category, category_tools in tools_dict.items():
+        # Add category header
+        category_name = category.replace('_', ' ').title()
+        tool_definitions.append(f"## {category_name}")
+        tool_definitions.append("")
+        
+        for tool_name, tool_info in category_tools.items():
+            # Tool name and description
+            tool_definitions.append(f"### {tool_name}")
+            tool_definitions.append(f"**Description**: {tool_info['description']}")
+            
+            # Parameters section
+            if not tool_info['parameters']:
+                tool_definitions.append("**Parameters**: None")
+            else:
+                tool_definitions.append("**Parameters**:")
+                for param in tool_info['parameters']:
+                    required_str = "required" if param.get("required", True) else "optional"
+                    param_line = f"- `{param['name']}` ({required_str}, {param['type']}): {param['description']}"
+                    tool_definitions.append(param_line)
+            
+            # Returns section
+            tool_definitions.append(f"**Returns**: {tool_info['returns']}")
+            tool_definitions.append("")
+    
+        # Generate TypeScript namespace for function signatures
+        namespace_lines = ["namespace functions {"]
+
+        for category, category_tools in tools_dict.items():
+            for tool_name, tool_info in category_tools.items():
+                # Build parameter type definition
+                if not tool_info['parameters']:
+                    param_type = "() => any"
+                else:
+                    param_parts = []
+                    for param in tool_info['parameters']:
+                        optional = "?" if not param.get("required", True) else ""
+                        param_parts.append(f"{param['name']}{optional}: {param['type']}")
+                    param_type = f"(_: {{{', '.join(param_parts)}}}) => any"
+
+                # Add tool to namespace with description
+                description = tool_info['description']
+                namespace_lines.append(f"    // {description}")
+                namespace_lines.append(f"    type {tool_name} = {param_type};")
+
+        namespace_lines.append("}")
+
+        harmony_format = f"""
+        # Tools
+
+        {chr(10).join(namespace_lines)}
+
+        # Detailed Tool Descriptions
+
+        {chr(10).join(tool_definitions)}
+
+        """
+    
+    return harmony_format
+
 def get_tools_format():
     """
     Get the format to use when making tool calls.
@@ -312,12 +384,17 @@ def get_tools_format():
     Returns:
         str: Instructions for how to format tool calls.
     """
+    import os
+    
+    # Check if Harmony mode is enabled to include Harmony-specific examples
+    use_harmony = os.getenv('USE_OPENAI_HARMONY', 'false')
+    
+    ##Section 1: Universal tool calling
     tools_format = """
 
-When you want to use a tool, make a tool call (no explanations) using this exact format:
+When you want to use a tool, make a tool call using this exact format:
 
-[[qwen-tool-start]]
-```
+<tool_call>
 {
     "name": "tool_name",
     "input": {
@@ -325,62 +402,60 @@ When you want to use a tool, make a tool call (no explanations) using this exact
         "param2": "value2"
     }
 }
-```
-[[qwen-tool-end]]
+</tool_call>
 
-Note that the triple backticks (```) are part of the format!
+For example, if you need to use a tool called "sample_tool" and want to pass the value "Hello World" to its parameter called "sample_greeting_param", then you would do:
 
-Example 1:
-************************
-User: What is your current working directory?
-Qwen-Max:
-[[qwen-tool-start]]
-```
+<tool_call>
 {
-    "name": "get_cwd",
+    "name": "sample_tool",
+    "input": {
+        "sample_greeting_param": "Hello World"
+    }
+}
+</tool_call>
+
+If a tool does not require any parameters, you can use an empty string ("") as the value for the input property. For example, if a tool called "no_param_tool" needs no params, you can call it like this:
+
+<tool_call>
+{
+    "name": "no_param_tool",
     "input": ""
 }
-```
-[[qwen-tool-end]]
-**********************
+</tool_call>
 
+"""
 
-Example 2:
-************************
-User: List the files in your current working directory.
-Qwen-Max:
-[[qwen-tool-start]]
-```
-{
-    "name": "list_directory",
-    "input": {
-        "path": "."
-    }
-}
-```
-[[qwen-tool-end]]
-**********************
+    #Section 2: Harmony-specific
+    if use_harmony == 'true':
+        tools_format += """For the "analysis" and "commentary" channels: 
+- Use the same tool calling format as above when you need to use tools during "analysis" and "commentary" channels, and all problem-solving steps. 
+- Always use the <tool_call> tag as part of the message to call the tool.
+- Example:
+    ***********
+     Assistant:
+     <|channel|>analysis<|message|>We need to query SQLite database. Use sqlite_execute_query. Query: SELECT COUNT(*) FROM orders JOIN customers ON orders.customer_id=customers.id WHERE orders.amount>50000 AND customers.department='Engineering'. Path: /example/path/to/tale.db. Then write JSON file with key num_big_orders. Use write_file.<|end|><|start|>assistant<|channel|>commentary to=tool.run code<|message|><tool_call>\n```\n{\n    \"name\": \"sqlite_execute_query\",\n    \"input\": {\n        \"database_path\": \"/example/path/to/tale.db\",\n        \"query\": \"SELECT COUNT(*) AS num_big_orders FROM orders JOIN customers ON orders.customer_id=customers.id WHERE orders.amount>50000 AND customers.department='Engineering';\",\n        \"limit\": 1000\n    }\n}\n```\n</tool_call>
+    ************
 
-Example 3:
-************************
-User: Can you check the syntax of my Python code?
-Qwen-Max:
-[[qwen-tool-start]]
-```
-{
-    "name": "python_check_syntax",
-    "input": {
-        "code": "print('Hello world'"
-    }
-}
-```
-[[qwen-tool-end]]
-**********************
+CONSTRAINT: ONLY ONE TOOL CALL IS ALLOWED PER MESSAGE
+- This includes any appearance of the <tool_call> before your final <|message|>
+- For example, this will fail:
+    ***********
+    Assistant:
+    <|channel|>analysis<|message|>Now write JSON file. I should use <tool_call>\n```\n{\n    \"name\": \"write_file\",\n    \"input\": {\n        \"path\": \"/example/path/to/big_orders_count.json\",\n        \"content\": \"{\\n  \\\"num_big_orders\\\": 1\\n}\"\n    }\n}\n```\n</tool_call><|end|><|start|>assistant<|channel|>commentary to=tool.run code<|message|><tool_call>\n```\n{\n    \"name\": \"write_file\",\n    \"input\": {\n        \"path\": \"/example/path/to/big_orders_count.json\",\n        \"content\": \"{\\n  \\\"num_big_orders\\\": 1\\n}\"\n    }\n}\n```\n</tool_call>
+    ************
+- To avoid that, only use <tool_call> for the final message, like this:
+    ***********
+    Assistant:
+    <|channel|>analysis<|message|>Now write JSON file.<|end|><|start|>assistant<|channel|>commentary to=tool.run code<|message|><tool_call>\n```\n{\n    \"name\": \"write_file\",\n    \"input\": {\n        \"path\": \"/example/path/to/big_orders_count.json\",\n        \"content\": \"{\\n  \\\"num_big_orders\\\": 1\\n}\"\n    }\n}\n```\n</tool_call>
+    ************
 
-Immediately end your response after calling a tool and the final triple backticks.
+    """
 
-After receiving the results of a tool call, do not parrot everything back to the user.
-Instead, just briefly summarize the results in 1-2 sentences.
+    #Section 3: Final universal constraints
+    tools_format += """Immediately end your response after calling a tool.
+
+NOTE: User messages that start with "Tool result:" are actually TOOL MESSAGES (automated, from tool execution) and do not come from the user.
 
 """
     return tools_format
