@@ -300,7 +300,7 @@ def format_messages(messages):
     tools_format = qwen_tools_lib.get_tools_format()
     print(tools_available)
     print(tools_format)
-    system_prompt = f"""You are Qwen-Max, an advanced AI model. You will assist the user with tasks. You can use tools when needed.
+    system_prompt = f"""You are a helpful assistant. You will assist the user with tasks. You can use tools when needed.
 
 You have the following tools available:
 <tools>
